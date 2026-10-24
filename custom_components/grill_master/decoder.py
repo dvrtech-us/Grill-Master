@@ -48,6 +48,21 @@ def convert_temperature(parts: list[int], offset: int) -> int | None:
     return value
 
 
+def _normalize_to_fahrenheit(value: int | None, is_fahrenheit: bool) -> int | None:
+    """Normalize a decoded temperature to Fahrenheit.
+
+    The grill's control panel can be switched to Celsius (FE0902FF), and
+    doing so changes the unit of the raw digits the MCU transmits, not just
+    how they're shown on the grill's own screen (confirmed against a live
+    LG1000BL: toggling the panel changed grill_set_temp from 180 to 82).
+    Zero is the MCU's "no reading" placeholder rather than a real
+    measurement, so it's passed through untouched.
+    """
+    if value is None or value == 0 or is_fahrenheit:
+        return value
+    return round(value * 9 / 5 + 32)
+
+
 def decode_status(message: str) -> dict[str, Any] | None:
     """Decode an FE0B status payload from sc_11.
 
@@ -140,16 +155,18 @@ def decode_temperatures(message: str) -> dict[str, Any] | None:
     if len(parts) < 24:
         return None
 
+    is_fahrenheit = parts[23] == 1
+
     return {
-        "p1_target": convert_temperature(parts, 2),
-        "p1_temp": convert_temperature(parts, 5),
-        "p2_temp": convert_temperature(parts, 8),
-        "p3_temp": convert_temperature(parts, 11),
-        "p4_temp": convert_temperature(parts, 14),
-        "grill_set_temp": convert_temperature(parts, 17),
-        "grill_temp": convert_temperature(parts, 20),
-        "smoker_act_temp": convert_temperature(parts, 17),
-        "is_fahrenheit": parts[23] == 1,
+        "p1_target": _normalize_to_fahrenheit(convert_temperature(parts, 2), is_fahrenheit),
+        "p1_temp": _normalize_to_fahrenheit(convert_temperature(parts, 5), is_fahrenheit),
+        "p2_temp": _normalize_to_fahrenheit(convert_temperature(parts, 8), is_fahrenheit),
+        "p3_temp": _normalize_to_fahrenheit(convert_temperature(parts, 11), is_fahrenheit),
+        "p4_temp": _normalize_to_fahrenheit(convert_temperature(parts, 14), is_fahrenheit),
+        "grill_set_temp": _normalize_to_fahrenheit(convert_temperature(parts, 17), is_fahrenheit),
+        "grill_temp": _normalize_to_fahrenheit(convert_temperature(parts, 20), is_fahrenheit),
+        "smoker_act_temp": _normalize_to_fahrenheit(convert_temperature(parts, 17), is_fahrenheit),
+        "is_fahrenheit": is_fahrenheit,
     }
 
 

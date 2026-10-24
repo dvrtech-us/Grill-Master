@@ -60,6 +60,15 @@ PROBE_NOT_CONNECTED_VALUE = decoder.PROBE_NOT_CONNECTED_VALUE
 LIVE_SC_12 = "FE0C00000000000009060009060009060000000000000001FF"
 LIVE_SC_11 = "FE0B00000000000009060000000000000000000002020001000000000000000000000100000000FF"
 
+# ============================================================================
+# Live payload captured from LG1000BL at 10.10.10.155 (grill actively running,
+# set point 180F) immediately after sending CMD_SET_CELSIUS (FE0902FF).
+# Captured: 2026-09-14. Raw digits are 82 (set point) / 102 (current) -
+# i.e. the actual Celsius values (180F=82.2C), confirming the panel's F/C
+# setting changes the unit of the transmitted digits, not just the display.
+# ============================================================================
+LIVE_SC_12_CELSIUS = "FE0C00000009060009060009060009060000080201000202FF"
+
 
 class TestParseHexMessage:
     """Tests for parse_hex_message()."""
@@ -190,6 +199,33 @@ class TestDecodeTemperatures:
         assert result["grill_set_temp"] == 250
         assert result["grill_temp"] == 248
         assert result["is_fahrenheit"] is True
+
+    def test_celsius_payload_normalized_to_fahrenheit(self):
+        """Live payload captured with the panel switched to Celsius.
+
+        Raw digits are 82 (set point) / 102 (current) - actual Celsius
+        values, not Fahrenheit shown with a wrong label. decode_temperatures
+        must convert them back to Fahrenheit so the rest of the integration
+        (bounds, alarms) keeps working regardless of the panel's unit.
+        """
+        result = decode_temperatures(LIVE_SC_12_CELSIUS)
+        assert result is not None
+        assert result["is_fahrenheit"] is False
+        # 82C -> 179.6F -> rounds to 180, matching the actual 180F set point.
+        assert result["grill_set_temp"] == 180
+        assert result["smoker_act_temp"] == 180
+        # 102C -> 215.6F -> rounds to 216.
+        assert result["grill_temp"] == 216
+
+    def test_celsius_payload_zero_not_converted(self):
+        """0 means 'no reading', not an actual 0-degree measurement."""
+        result = decode_temperatures(LIVE_SC_12_CELSIUS)
+        assert result["p1_target"] == 0
+
+    def test_celsius_payload_probe_not_connected_stays_none(self):
+        result = decode_temperatures(LIVE_SC_12_CELSIUS)
+        assert result["p1_temp"] is None
+        assert result["p2_temp"] is None
 
 
 class TestDecodeStatus:

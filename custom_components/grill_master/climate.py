@@ -1,8 +1,10 @@
 """Climate platform for Grill Master.
 
 Exposes the grill as a climate entity with HEAT mode for temperature control.
-Allows setting the target temperature (180-600F in 5-degree increments)
-and turning the grill off.
+Allows setting the target temperature and turning the grill off. The grill's
+MCU always operates in Fahrenheit (180-600F in 5-degree increments); this
+entity converts to/from Celsius when the Home Assistant instance is
+configured for Celsius, so the displayed bounds/step match that unit.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .api import GrillMasterApi
 from .const import (
@@ -53,11 +56,7 @@ class GrillMasterClimate(
 
     _attr_has_entity_name = True
     _attr_name = "Grill"
-    _attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
-    _attr_min_temp = MIN_TEMP_F
-    _attr_max_temp = MAX_TEMP_F
-    _attr_target_temperature_step = TEMP_STEP_F
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
 
     def __init__(
@@ -76,13 +75,52 @@ class GrillMasterClimate(
             model=MODEL,
         )
 
+        # The grill's MCU always speaks Fahrenheit in 5-degree steps.
+        # Present the entity in whichever unit this Home Assistant
+        # instance is configured for, converting bounds/step to match.
+        self._attr_temperature_unit = coordinator.hass.config.units.temperature_unit
+        if self._attr_temperature_unit == UnitOfTemperature.CELSIUS:
+            self._attr_min_temp = round(
+                TemperatureConverter.convert(
+                    MIN_TEMP_F, UnitOfTemperature.FAHRENHEIT, UnitOfTemperature.CELSIUS
+                )
+            )
+            self._attr_max_temp = round(
+                TemperatureConverter.convert(
+                    MAX_TEMP_F, UnitOfTemperature.FAHRENHEIT, UnitOfTemperature.CELSIUS
+                )
+            )
+            self._attr_target_temperature_step = 1
+        else:
+            self._attr_min_temp = MIN_TEMP_F
+            self._attr_max_temp = MAX_TEMP_F
+            self._attr_target_temperature_step = TEMP_STEP_F
+
+    def _f_to_display_unit(self, temp_f: float) -> float:
+        """Convert a Fahrenheit value from the grill into the display unit."""
+        if self._attr_temperature_unit == UnitOfTemperature.CELSIUS:
+            return TemperatureConverter.convert(
+                temp_f, UnitOfTemperature.FAHRENHEIT, UnitOfTemperature.CELSIUS
+            )
+        return temp_f
+
+    def _display_unit_to_f(self, temperature: float) -> float:
+        """Convert a value in the display unit back to Fahrenheit for the grill."""
+        if self._attr_temperature_unit == UnitOfTemperature.CELSIUS:
+            return TemperatureConverter.convert(
+                temperature, UnitOfTemperature.CELSIUS, UnitOfTemperature.FAHRENHEIT
+            )
+        return temperature
+
     @property
     def current_temperature(self) -> float | None:
         """Return the current grill temperature."""
         if self.coordinator.data is None:
             return None
         temp = self.coordinator.data.get("grill_temp")
-        return temp if temp and temp > 0 else None
+        if not temp or temp <= 0:
+            return None
+        return self._f_to_display_unit(temp)
 
     @property
     def target_temperature(self) -> float | None:
@@ -90,7 +128,9 @@ class GrillMasterClimate(
         if self.coordinator.data is None:
             return None
         temp = self.coordinator.data.get("grill_set_temp")
-        return temp if temp and temp > 0 else None
+        if not temp or temp <= 0:
+            return None
+        return self._f_to_display_unit(temp)
 
     @property
     def hvac_mode(self) -> HVACMode:
@@ -106,8 +146,10 @@ class GrillMasterClimate(
         if temperature is None:
             return
 
-        # Round to nearest 5-degree increment
-        temp_f = int(round(temperature / TEMP_STEP_F) * TEMP_STEP_F)
+        # The grill's MCU only understands Fahrenheit in 5-degree steps,
+        # regardless of what unit was used to request the temperature.
+        temp_f = self._display_unit_to_f(temperature)
+        temp_f = int(round(temp_f / TEMP_STEP_F) * TEMP_STEP_F)
         temp_f = max(MIN_TEMP_F, min(MAX_TEMP_F, temp_f))
 
         _LOGGER.info("Setting grill temperature to %d F", temp_f)

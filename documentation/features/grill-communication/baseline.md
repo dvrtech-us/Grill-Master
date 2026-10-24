@@ -6,7 +6,7 @@
 2. All MCU hex payloads MUST be decoded before being stored or pushed to clients
 3. A grill that fails to respond for consecutive polls MUST be reported as "unavailable" via the HA coordinator
 4. Commands sent via `PB.SendMCUCommand` MUST use the correct hex encoding
-5. Temperature values MUST be decoded to degrees Fahrenheit (default); HA handles unit conversion when device_class=temperature
+5. Temperature values MUST be decoded to degrees Fahrenheit regardless of the grill panel's F/C setting (`decode_temperatures()` normalizes using the payload's own `is_fahrenheit` flag - the panel's Celsius mode changes the unit of the raw transmitted digits, confirmed live); HA handles further unit conversion for display when device_class=temperature
 6. The RPC client MUST enforce a 5-second HTTP timeout to prevent blocking the HA event loop
 
 ## Expected Behavior

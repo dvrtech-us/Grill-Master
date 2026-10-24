@@ -50,7 +50,23 @@ Ported from `pytboss` (github.com/dknowles2/pytboss) Control Board 8 JavaScript 
 
 The MCU encodes temperatures as 3 separate bytes: hundreds, tens, ones.
 - `convert_temperature(parts, offset)` reads 3 bytes and returns `h*100 + t*10 + o`
-- Example: bytes `[0, 9, 6]` at offset = 96 degrees F
+- Example: bytes `[0, 9, 6]` at offset = 96 degrees
+
+The grill's control panel can be switched to Celsius (`FE0902FF`). Confirmed
+against a live LG1000BL: doing so changes the **unit of the raw digits**
+FE0C transmits, not just how they're shown on the grill's own screen (a
+180F set point became raw `082`). `decode_temperatures()` reads the
+`is_fahrenheit` flag (offset 23) and normalizes every temperature field
+back to Fahrenheit via `_normalize_to_fahrenheit()`, so the rest of the
+integration (bounds, climate entity, alarms) always sees Fahrenheit
+regardless of the panel's current unit setting. `0` is left unconverted -
+it's the MCU's "no reading" placeholder, not a real measurement.
+
+FE0B's own `is_fahrenheit` bit (offset 36) is **not** used for this - it
+has been observed to disagree with FE0C's in the same `PB.GetState` call
+(see `grill-communication` trail). This doesn't affect the integration
+since the coordinator merges FE0C after FE0B, so FE0C's normalized values
+always win.
 
 ### FE0C (Temperature Payload) - `sc_12`
 
