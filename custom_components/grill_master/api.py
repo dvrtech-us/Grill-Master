@@ -164,9 +164,7 @@ class GrillMasterApi:
             RPC response dict.
         """
         _LOGGER.debug("Sending MCU command: %s", hex_command)
-        return await self._rpc_post(
-            "PB.SendMCUCommand", {"params": {"command": hex_command}}
-        )
+        return await self._rpc_post("PB.SendMCUCommand", {"command": hex_command})
 
     async def set_temperature(self, temp_f: int) -> dict[str, Any]:
         """Set the grill target temperature.

@@ -101,6 +101,19 @@ class GrillMasterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             state.update(temperatures)
 
         if not state:
+            # The grill firmware clears sc_11/sc_12 the instant any MCU command
+            # is sent (turn on/off, set temp, light), and only refills them on
+            # the next UART poll cycle a couple seconds later. A poll landing
+            # in that gap is a transient empty read, not a real failure — keep
+            # the last known state instead of flapping to unavailable.
+            if self.data:
+                _LOGGER.debug(
+                    "Grill state empty (likely mid-command cache clear); "
+                    "keeping last known state. sc_11=%r, sc_12=%r",
+                    sc_11,
+                    sc_12,
+                )
+                return self.data
             raise UpdateFailed(
                 f"Failed to decode grill state. sc_11={sc_11!r}, sc_12={sc_12!r}"
             )
