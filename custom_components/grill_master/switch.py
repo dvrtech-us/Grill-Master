@@ -19,7 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import GrillCommandError, GrillConnectionError, GrillMasterApi
-from .const import CONF_DEVICE_ID, DOMAIN, MANUFACTURER, MODEL
+from .const import CONF_DEVICE_ID, DOMAIN
 from .coordinator import GrillMasterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,8 +74,8 @@ class GrillMasterLightSwitch(
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
-            manufacturer=MANUFACTURER,
-            model=MODEL,
+            manufacturer=coordinator.api.profile.manufacturer,
+            model=coordinator.api.profile.model,
         )
         self._light_failed = False
 

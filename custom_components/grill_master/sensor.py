@@ -23,7 +23,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER, MODEL
+from .const import DOMAIN
 from .coordinator import GrillMasterCoordinator
 
 
@@ -85,6 +85,24 @@ SENSOR_DESCRIPTIONS: tuple[GrillMasterSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
         icon="mdi:thermometer-probe",
     ),
+    GrillMasterSensorDescription(
+        key="p3_temp",
+        name="Probe 3 Temperature",
+        data_key="p3_temp",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
+        icon="mdi:thermometer-probe",
+    ),
+    GrillMasterSensorDescription(
+        key="p4_temp",
+        name="Probe 4 Temperature",
+        data_key="p4_temp",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
+        icon="mdi:thermometer-probe",
+    ),
 )
 
 
@@ -141,8 +159,8 @@ def _device_info(
     return DeviceInfo(
         identifiers={(DOMAIN, entry.entry_id)},
         name=entry.title,
-        manufacturer=MANUFACTURER,
-        model=MODEL,
+        manufacturer=coordinator.api.profile.manufacturer,
+        model=coordinator.api.profile.model,
         sw_version=info.get("fw_version", ""),
         configuration_url=f"http://{coordinator.api.host}",
     )

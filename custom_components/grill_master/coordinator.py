@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import GrillConnectionError, GrillMasterApi
+from .board_profiles import decode_nexgrill_status
 from .const import DEFAULT_POLL_INTERVAL, DOMAIN
 from .decoder import decode_status, decode_temperatures
 
@@ -84,23 +85,49 @@ class GrillMasterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             raw_state = await self.api.get_state()
         except GrillConnectionError as err:
+            if self.api.profile.decoded_state and self.api._is_http_500(err):
+                if self.data:
+                    _LOGGER.debug(
+                        "Nexgrill state request returned HTTP 500; retaining "
+                        "the last known state"
+                    )
+                    return self.data
+                _LOGGER.debug(
+                    "Nexgrill state request returned HTTP 500 before an initial "
+                    "state was available"
+                )
+                return {"module_is_on": None}
             raise UpdateFailed(f"Cannot reach grill: {err}") from err
 
-        # Decode both payloads
-        state: dict[str, Any] = {}
+        if self.api.profile.decoded_state:
+            state = decode_nexgrill_status(raw_state) or {}
+            if state:
+                state["_raw_status"] = raw_state.get("message", "")
+            sc_11 = ""
+            sc_12 = ""
+        else:
+            state = {}
+            sc_11 = raw_state.get("sc_11", "")
+            sc_12 = raw_state.get("sc_12", "")
 
-        sc_11 = raw_state.get("sc_11", "")
-        sc_12 = raw_state.get("sc_12", "")
+            status = decode_status(sc_11)
+            if status:
+                state.update(status)
 
-        status = decode_status(sc_11)
-        if status:
-            state.update(status)
-
-        temperatures = decode_temperatures(sc_12)
-        if temperatures:
-            state.update(temperatures)
+            temperatures = decode_temperatures(sc_12)
+            if temperatures:
+                state.update(temperatures)
 
         if not state:
+            if self.api.profile.decoded_state:
+                if self.data:
+                    _LOGGER.debug(
+                        "Nexgrill response has no recognized status fields; "
+                        "keeping last known state"
+                    )
+                    return self.data
+                raise UpdateFailed("Failed to decode Nexgrill status response")
+
             # The grill firmware clears sc_11/sc_12 the instant any MCU command
             # is sent (turn on/off, set temp, light), and only refills them on
             # the next UART poll cycle a couple seconds later. A poll landing
@@ -119,8 +146,9 @@ class GrillMasterCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         # Add raw payloads for debugging
-        state["_raw_sc_11"] = sc_11
-        state["_raw_sc_12"] = sc_12
+        if not self.api.profile.decoded_state:
+            state["_raw_sc_11"] = sc_11
+            state["_raw_sc_12"] = sc_12
 
         # Cloud sync (fire-and-forget, never blocks polling)
         if self._cloud_enabled and self._cloud_url:
