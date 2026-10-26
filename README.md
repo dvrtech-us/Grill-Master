@@ -2,13 +2,13 @@
 
 A custom [Home Assistant](https://www.home-assistant.io/) integration for monitoring and controlling pellet grills over the local network via HTTP JSON-RPC.
 
-Built for the **LG1000BL (Black Label)** series, but should work with other models using the same Mongoose OS ESP32 controller (Control Board 8).
+Built for the **LG1000BL (Black Label)** series, with board profiles for Control Board 8 and Nexgrill/Broil King Mongoose OS controllers.
 
 > **Disclaimer**: This project is **unofficial** and is not affiliated with, endorsed by, sponsored by, or supported by any grill manufacturer. All product names, trademarks, and registered trademarks are property of their respective owners. This software communicates with the grill's local network interface using reverse-engineered protocols — use at your own risk.
 
 ## Features
 
-- **Temperature Monitoring** — Grill temperature, set point, and up to 2 meat probe temperatures, updating every 5 seconds
+- **Temperature Monitoring** — Grill temperature, set point, and up to 4 meat probe temperatures. Control Board 8 updates every 5 seconds; the NXP profile updates every 15 seconds
 - **Grill Control** — Set target temperature (180-600F in 5F increments), turn grill off
 - **Light Control** — Toggle the grill light on/off
 - **Status Monitoring** — Fan, auger motor, heater, primer states plus error detection (no pellets, high temp, igniter, fan, motor errors)
@@ -17,13 +17,21 @@ Built for the **LG1000BL (Black Label)** series, but should work with other mode
 
 ## Supported Hardware
 
-Any WiFi-enabled pellet grill using the Mongoose OS ESP32 controller should work. These are sold under several brands, all manufactured by Dansons Inc.
+WiFi-enabled pellet grills using the Mongoose OS ESP32 controller can use Grill Master's supported board profiles. Board support is selected from the controller device ID because these boards do not all share RPC methods or MCU command formats.
 
 ### Tested
 
 | Manufacturer     | Model                       | Control Board | Temp Range | Probes | Light |
 | ---------------- | --------------------------- | ------------- | ---------- | ------ | ----- |
 | Louisiana Grills | LG1000BL (Black Label 1000) | 8             | 180-600F   | 2      | No    |
+
+### Protocol Validated (Integration Awaiting Live Test)
+
+| Manufacturer          | Model             | Control Board/Profile | Temp Range | Probes | Light |
+| --------------------- | ----------------- | --------------------- | ---------- | ------ | ----- |
+| Nexgrill / Broil King | Oakford 790 / NXP | Mongoose OS           | Unknown    | 4      | Unknown |
+
+Controllers whose `Sys.GetInfo` device ID starts with `NXP-` use the decoded-state Nexgrill profile. The protocol has been live-validated by the contributor; this integration's Nexgrill path still needs a live-device test.
 
 ### Should Work (Control Board 8 — same decoder)
 
@@ -58,7 +66,7 @@ Any WiFi-enabled pellet grill using the Mongoose OS ESP32 controller should work
 | ------------ | ------------------------- | ------------- | ---------- | ------ | ----- |
 | Pit Boss     | Lexington (Wi-Fi Upgrade) | 6             | 180-500F   | 2      | No    |
 
-> **Note**: Control Board 5 and 6 models use a different MCU payload format than Control Board 8/9. They will likely need decoder changes to work. Control Board 8 and 9 models share the same protocol and are most likely to work out of the box.
+> **Note**: Control Board 5 and 6 models use a different MCU payload format than Control Board 8/9 and are not yet supported. Control Board 8 and 9 models share the same protocol. Nexgrill/Broil King NXP controllers use a separate RPC and command profile; they do not use the Control Board 8 decoder.
 
 **Requirements**: The grill must be connected to your local WiFi network. This integration communicates via HTTP JSON-RPC on port 80 — no cloud account or Bluetooth required. Tested on firmware 0.2.3 (unauthenticated). Firmware 0.5.7+ may require authentication (not yet supported).
 
@@ -120,6 +128,8 @@ There are other Home Assistant integrations for pellet grills. Here's how Grill 
 | Probe 1 Temperature | Meat probe 1 reading                        |
 | Probe 1 Target      | Meat probe 1 target temperature             |
 | Probe 2 Temperature | Meat probe 2 reading                        |
+| Probe 3 Temperature | Meat probe 3 reading                        |
+| Probe 4 Temperature | Meat probe 4 reading                        |
 
 ### Binary Sensors
 
@@ -166,9 +176,10 @@ An example automation that alerts when the grill temperature drifts more than 20
 Home Assistant
   └── custom_components/grill_master/
         │
-        ├── DataUpdateCoordinator (polls every 5s)
-        │     ├── GET http://<grill-ip>/rpc/PB.GetState
-        │     │     └── Decodes FE0B (status) + FE0C (temperature) hex payloads
+        ├── DataUpdateCoordinator
+        │     ├── Board profile selects the RPC, status adapter, and poll interval
+        │     │     ├── Control Board 8: PB.GetState + FE0B/FE0C decoding (every 5s)
+        │     │     └── NXP: GetCurrentTemperatures + JSON status adapter (every 15s)
         │     └── Optional POST to cloud endpoint
         │
         ├── sensor.py        — Temperature sensors
@@ -179,7 +190,7 @@ Home Assistant
 
 ### How Grill Communication Works
 
-The LG1000BL uses an ESP32 running Mongoose OS with an HTTP JSON-RPC interface. The integration polls `PB.GetState` which returns two hex-encoded MCU payloads:
+The LG1000BL uses an ESP32 running Mongoose OS with an HTTP JSON-RPC interface. Its Control Board 8 profile polls `PB.GetState`, which returns two hex-encoded MCU payloads:
 
 - **FE0B** (status) — Power state, error flags, fan/motor/heater/light states, recipe info
 - **FE0C** (temperatures) — Grill temp, set point, probe 1-4 temperatures
@@ -187,6 +198,8 @@ The LG1000BL uses an ESP32 running Mongoose OS with an HTTP JSON-RPC interface. 
 Temperatures are encoded as 3 bytes each (hundreds, tens, ones digits). The value `960` is a sentinel meaning "probe not connected."
 
 Commands are sent via `PB.SendMCUCommand` with hex payloads (e.g., `FE0102FF` = power off, `FE0201FF` = light on).
+
+The Nexgrill/Broil King NXP profile instead posts `{"reply":"full"}` to `GetCurrentTemperatures` every 15 seconds. Its JSON message is already decoded; temperatures stay in wire Fahrenheit regardless of the display-unit setting, and `960` means a disconnected probe. Commands use `SendGenericCommand` with E1E1/30xx frames (firmware appends the checksum), while cook timers use `SetTimer`. The profile treats `moduleIsOn` values 1 and 2 as powered and 0 as off. Remote start requires the grill to be physically powered on first.
 
 ## Known Limitations & Future Work
 
@@ -204,9 +217,9 @@ The full algorithm is documented in `documentation/features/grill-communication/
 
 - **Local network only** — The grill and Home Assistant must be on the same network
 - **No BLE support** — This integration uses HTTP only. For Bluetooth, see [ha-pitboss](https://github.com/dknowles2/ha-pitboss)
-- **ESP32 resource limits** — Polling faster than 2 seconds may cause instability on the 65KB-RAM controller
+- **ESP32 resource limits** — Polling faster than 2 seconds may cause instability on the 65KB-RAM controller. The NXP profile defaults to a 15-second poll instead of the Control Board 8 default of 5 seconds
 - **Probe sentinel value** — Temperature value 960 means "probe not connected" and is reported as unavailable
-- **Control Board 8/9 only** — Other control board types have different payload formats
+- **Supported profiles only** — Control Board 8/9 and NXP Mongoose OS profiles are supported; other boards have different protocols
 
 ## Acknowledgements
 

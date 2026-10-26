@@ -20,6 +20,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -28,10 +29,8 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 from .api import GrillMasterApi
 from .const import (
     DOMAIN,
-    MANUFACTURER,
     MAX_TEMP_F,
     MIN_TEMP_F,
-    MODEL,
     TEMP_STEP_F,
 )
 from .coordinator import GrillMasterCoordinator
@@ -71,8 +70,8 @@ class GrillMasterClimate(
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
-            manufacturer=MANUFACTURER,
-            model=MODEL,
+            manufacturer=coordinator.api.profile.manufacturer,
+            model=coordinator.api.profile.model,
         )
 
         # The grill's MCU always speaks Fahrenheit in 5-degree steps.
@@ -157,10 +156,16 @@ class GrillMasterClimate(
         await self.coordinator.async_request_refresh()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Set the HVAC mode. Only OFF is actionable (turns grill off)."""
+        """Set the HVAC mode."""
         if hvac_mode == HVACMode.OFF:
             _LOGGER.info("Turning grill off")
             await self._api.turn_off()
             await self.coordinator.async_request_refresh()
-        # HEAT mode doesn't have a "turn on" command; the grill must be
-        # started physically or via the set_temperature command.
+        elif self._api.profile.decoded_state:
+            state = self.coordinator.data or {}
+            if state.get("module_is_on") is not True:
+                raise HomeAssistantError(
+                    "Power on the grill physically before starting it remotely"
+                )
+            await self._api.start()
+            await self.coordinator.async_request_refresh()

@@ -13,7 +13,9 @@ CONF_CLOUD_URL = "cloud_url"
 
 # Defaults
 DEFAULT_NAME = "Grill Master"
+# Control Board 8 / LG1000BL. The NXP profile has its own interval.
 DEFAULT_POLL_INTERVAL = 5  # seconds
+NEXGRILL_POLL_INTERVAL = 15  # seconds
 DEFAULT_TIMEOUT = 5  # seconds
 DEFAULT_CLOUD_URL = ""
 

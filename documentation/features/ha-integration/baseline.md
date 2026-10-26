@@ -2,7 +2,7 @@
 
 ## Invariants
 
-1. The coordinator MUST poll `PB.GetState` at the configured interval (default 5s)
+1. The Control Board 8 coordinator MUST poll `PB.GetState` at the configured interval (default 5s). The NXP profile polls every 15 seconds by default.
 2. Both FE0B and FE0C payloads MUST be decoded on every poll cycle
 3. All sensor entities MUST update within 1 second of a coordinator refresh
 4. Cloud sync failure MUST NOT block or delay local polling/entity updates
@@ -14,7 +14,7 @@
 
 ## Expected Behavior
 
-- **Normal operation**: All sensors update every 5 seconds with decoded temperature and status values
+- **Normal operation**: Control Board 8 sensors update every 5 seconds with decoded temperature and status values. NXP sensors update every 15 seconds by default
 - **Grill unreachable**: All entities show "unavailable" state; coordinator retries on next interval
 - **Grill powered off (WiFi still on)**: RPC endpoints still respond; `module_is_on` = false, temperatures may be ambient or 0
 - **Probe not inserted**: Probe temperature reads 0 → reported as None/unavailable

@@ -27,6 +27,7 @@ except ImportError:
     from homeassistant.components.dhcp import DhcpServiceInfo
 
 from .api import GrillConnectionError, GrillMasterApi
+from .board_profiles import profile_for_device_id, resolve_poll_interval
 from .const import (
     CONF_CLOUD_ENABLED,
     CONF_CLOUD_URL,
@@ -103,11 +104,18 @@ class GrillMasterConfigFlow(ConfigFlow, domain=DOMAIN):
         if not await api.ping():
             raise GrillConnectionError("Grill did not respond to ping")
 
-        self._firmware_version = await api.get_firmware_version()
         info = await api.get_info()
-
-        self._device_id = info.get("id", "")
+        self._device_id = str(info.get("id") or "")
         self._mac = _format_mac(info.get("mac", ""))
+
+        if self._device_id.upper().startswith("NXP-"):
+            self._firmware_version = info.get("fw_version", "unknown")
+        else:
+            self._firmware_version = await api.get_firmware_version()
+
+        self._poll_interval = resolve_poll_interval(
+            profile_for_device_id(self._device_id), self._poll_interval
+        )
 
         return info
 
@@ -155,7 +163,9 @@ class GrillMasterConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="cannot_connect")
 
         # Only proceed if Sys.GetInfo returned a PB device ID (starts with "LBL-" etc.)
-        if not self._device_id or not self._device_id.startswith(("LBL-", "LPB-", "PB")):
+        if not self._device_id or not self._device_id.upper().startswith(
+            ("LBL-", "LPB-", "PB", "NXP-")
+        ):
             # Not a supported grill — just a random Espressif device
             return self.async_abort(reason="not_supported_grill")
 

@@ -19,7 +19,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER, MODEL
+from .const import DOMAIN
 from .coordinator import GrillMasterCoordinator
 
 
@@ -149,8 +149,8 @@ class GrillMasterBinarySensor(
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
-            manufacturer=MANUFACTURER,
-            model=MODEL,
+            manufacturer=coordinator.api.profile.manufacturer,
+            model=coordinator.api.profile.model,
         )
 
     @property
