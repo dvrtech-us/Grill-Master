@@ -17,14 +17,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import GrillMasterApi
-from .board_profiles import profile_for_device_id
+from .board_profiles import profile_for_device_id, resolve_poll_interval
 from .const import (
     CONF_CLOUD_ENABLED,
     CONF_CLOUD_URL,
     CONF_DEVICE_ID,
     CONF_HOST,
     CONF_POLL_INTERVAL,
-    DEFAULT_POLL_INTERVAL,
     DOMAIN,
 )
 from .coordinator import GrillMasterCoordinator
@@ -42,12 +41,14 @@ PLATFORMS: list[Platform] = [
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Grill Master from a config entry."""
     host = entry.data[CONF_HOST]
-    poll_interval = entry.data.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
     cloud_enabled = entry.data.get(CONF_CLOUD_ENABLED, False)
     cloud_url = entry.data.get(CONF_CLOUD_URL, "")
 
     session = async_get_clientsession(hass)
     profile = profile_for_device_id(entry.data.get(CONF_DEVICE_ID, ""))
+    poll_interval = resolve_poll_interval(
+        profile, entry.data.get(CONF_POLL_INTERVAL)
+    )
     api = GrillMasterApi(session, host, profile=profile)
 
     coordinator = GrillMasterCoordinator(

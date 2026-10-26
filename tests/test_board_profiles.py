@@ -93,6 +93,24 @@ class TestBoardProfiles(unittest.TestCase):
             board_profiles.CONTROL_BOARD_8,
         )
 
+    def test_poll_intervals_are_profile_specific(self):
+        const = sys.modules["custom_components.grill_master.const"]
+        self.assertEqual(const.DEFAULT_POLL_INTERVAL, 5)
+        self.assertEqual(const.NEXGRILL_POLL_INTERVAL, 15)
+        self.assertEqual(board_profiles.CONTROL_BOARD_8.poll_interval, 5)
+        self.assertEqual(board_profiles.NEXGRILL_MONGOOSE.poll_interval, 15)
+
+        resolve = board_profiles.resolve_poll_interval
+        nexgrill = board_profiles.NEXGRILL_MONGOOSE
+        control_board = board_profiles.CONTROL_BOARD_8
+        # The shared 5-second default is not an NXP choice.
+        self.assertEqual(resolve(nexgrill, None), 15)
+        self.assertEqual(resolve(nexgrill, 5), 15)
+        self.assertEqual(resolve(nexgrill, 30), 30)
+        self.assertEqual(resolve(control_board, None), 5)
+        self.assertEqual(resolve(control_board, 5), 5)
+        self.assertEqual(resolve(control_board, 10), 10)
+
     def test_command_frames_match_protocol(self):
         build = board_profiles.build_nexgrill_command
         self.assertEqual(

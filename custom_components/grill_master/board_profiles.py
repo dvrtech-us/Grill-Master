@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .const import DEFAULT_POLL_INTERVAL, NEXGRILL_POLL_INTERVAL
+
 
 @dataclass(frozen=True)
 class BoardProfile:
@@ -21,6 +23,7 @@ class BoardProfile:
     firmware_rpc: str | None
     decoded_state: bool = False
     timer_rpc: str | None = None
+    poll_interval: int = DEFAULT_POLL_INTERVAL
 
 
 CONTROL_BOARD_8 = BoardProfile(
@@ -41,7 +44,21 @@ NEXGRILL_MONGOOSE = BoardProfile(
     firmware_rpc=None,
     decoded_state=True,
     timer_rpc="SetTimer",
+    poll_interval=NEXGRILL_POLL_INTERVAL,
 )
+
+
+def resolve_poll_interval(profile: BoardProfile, configured: int | None) -> int:
+    """Return the poll interval for a board profile.
+
+    ``DEFAULT_POLL_INTERVAL`` is the Control Board 8 default. Setup stores
+    that shared value before the device id is known. Treat it as "no
+    explicit choice" and use the profile interval. Any other configured
+    value is kept.
+    """
+    if configured is None or configured == DEFAULT_POLL_INTERVAL:
+        return profile.poll_interval
+    return configured
 
 
 def profile_for_device_id(device_id: str | None) -> BoardProfile:

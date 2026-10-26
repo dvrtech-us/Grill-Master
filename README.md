@@ -8,7 +8,7 @@ Built for the **LG1000BL (Black Label)** series, with board profiles for Control
 
 ## Features
 
-- **Temperature Monitoring** — Grill temperature, set point, and up to 4 meat probe temperatures, updating every 5 seconds
+- **Temperature Monitoring** — Grill temperature, set point, and up to 4 meat probe temperatures. Control Board 8 updates every 5 seconds; the NXP profile updates every 15 seconds
 - **Grill Control** — Set target temperature (180-600F in 5F increments), turn grill off
 - **Light Control** — Toggle the grill light on/off
 - **Status Monitoring** — Fan, auger motor, heater, primer states plus error detection (no pellets, high temp, igniter, fan, motor errors)
@@ -176,10 +176,10 @@ An example automation that alerts when the grill temperature drifts more than 20
 Home Assistant
   └── custom_components/grill_master/
         │
-        ├── DataUpdateCoordinator (polls every 5s)
-        │     ├── Board profile selects the RPC and status adapter
-        │     │     ├── Control Board 8: PB.GetState + FE0B/FE0C decoding
-        │     │     └── NXP: GetCurrentTemperatures + JSON status adapter
+        ├── DataUpdateCoordinator
+        │     ├── Board profile selects the RPC, status adapter, and poll interval
+        │     │     ├── Control Board 8: PB.GetState + FE0B/FE0C decoding (every 5s)
+        │     │     └── NXP: GetCurrentTemperatures + JSON status adapter (every 15s)
         │     └── Optional POST to cloud endpoint
         │
         ├── sensor.py        — Temperature sensors
@@ -199,7 +199,7 @@ Temperatures are encoded as 3 bytes each (hundreds, tens, ones digits). The valu
 
 Commands are sent via `PB.SendMCUCommand` with hex payloads (e.g., `FE0102FF` = power off, `FE0201FF` = light on).
 
-The Nexgrill/Broil King NXP profile instead posts `{"reply":"full"}` to `GetCurrentTemperatures`. Its JSON message is already decoded; temperatures stay in wire Fahrenheit regardless of the display-unit setting, and `960` means a disconnected probe. Commands use `SendGenericCommand` with E1E1/30xx frames (firmware appends the checksum), while cook timers use `SetTimer`. The profile treats `moduleIsOn` values 1 and 2 as powered and 0 as off. Remote start requires the grill to be physically powered on first.
+The Nexgrill/Broil King NXP profile instead posts `{"reply":"full"}` to `GetCurrentTemperatures` every 15 seconds. Its JSON message is already decoded; temperatures stay in wire Fahrenheit regardless of the display-unit setting, and `960` means a disconnected probe. Commands use `SendGenericCommand` with E1E1/30xx frames (firmware appends the checksum), while cook timers use `SetTimer`. The profile treats `moduleIsOn` values 1 and 2 as powered and 0 as off. Remote start requires the grill to be physically powered on first.
 
 ## Known Limitations & Future Work
 
@@ -217,7 +217,7 @@ The full algorithm is documented in `documentation/features/grill-communication/
 
 - **Local network only** — The grill and Home Assistant must be on the same network
 - **No BLE support** — This integration uses HTTP only. For Bluetooth, see [ha-pitboss](https://github.com/dknowles2/ha-pitboss)
-- **ESP32 resource limits** — Polling faster than 2 seconds may cause instability on the 65KB-RAM controller
+- **ESP32 resource limits** — Polling faster than 2 seconds may cause instability on the 65KB-RAM controller. The NXP profile defaults to a 15-second poll instead of the Control Board 8 default of 5 seconds
 - **Probe sentinel value** — Temperature value 960 means "probe not connected" and is reported as unavailable
 - **Supported profiles only** — Control Board 8/9 and NXP Mongoose OS profiles are supported; other boards have different protocols
 

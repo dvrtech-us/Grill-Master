@@ -9,6 +9,7 @@
 5. Temperatures supplied to HA MUST be Fahrenheit. Control Board 8 values are normalized from the FE0C unit flag; NXP always reports Fahrenheit even when its display is set to Celsius.
 6. The RPC client MUST enforce a 5-second HTTP timeout to prevent blocking the HA event loop
 7. NXP `moduleIsOn` values 0, 1, and 2 mean off, cooking, and powered/idle; only 0 is off. Remote start MUST NOT be sent unless the controller is already physically powered on.
+8. The Control Board 8 profile MUST poll every 5 seconds by default. The NXP profile MUST poll every 15 seconds by default. A configured interval other than that shared 5-second default is kept.
 
 ## Expected Behavior
 
@@ -20,7 +21,7 @@
 - `PB.GetFirmwareVersion` returns `{"firmwareVersion": "0.2.3"}`
 - `RPC.Ping` returns empty success response when grill is reachable
 - When the grill is powered off but connected to WiFi, RPC endpoints still respond (controller stays on)
-- Polling interval of 3 seconds is fast enough for meaningful temperature tracking without overloading the ESP32
+- Control Board 8 polls every 5 seconds by default. The NXP profile polls every 15 seconds by default and does not inherit the Control Board 8 interval
 
 ## Known Limitations
 

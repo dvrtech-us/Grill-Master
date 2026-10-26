@@ -82,7 +82,7 @@ Fields to decode:
 
 Controllers whose `Sys.GetInfo` device ID starts with `NXP-` use the Nexgrill profile in `board_profiles.py`; other devices retain the Control Board 8 profile.
 
-- Poll `GetCurrentTemperatures` with `{"reply":"full"}`. The JSON status object is nested as a string in `message`, so `decode_nexgrill_status()` adapts it directly without using `decoder.py`.
+- Poll `GetCurrentTemperatures` with `{"reply":"full"}` every 15 seconds (`NEXGRILL_POLL_INTERVAL`). Control Board 8 keeps its 5-second default. The JSON status object is nested as a string in `message`, so `decode_nexgrill_status()` adapts it directly without using `decoder.py`.
 - The board reports temperatures in Fahrenheit regardless of the display-unit flag. A probe value of `960` maps to unavailable.
 - `moduleIsOn` is the reliable power state: `0` is off, `1` is cooking, and `2` is powered/idle. The climate entity refuses remote start unless this state is on.
 - Send E1E1/30xx decimal-byte strings through `SendGenericCommand`; the firmware appends the checksum. Temperature uses a 16-bit big-endian Fahrenheit value. Start, mode, power-off, and display-unit commands use the function codes from the board profile.
